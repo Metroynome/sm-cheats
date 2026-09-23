@@ -1,0 +1,74 @@
+EE_GCC_MAJOR := $(firstword $(subst ., ,$(shell $(EE_CC) -dumpversion)))
+ifeq ($(filter $(HOOK_MODE),FRAME MCP),)
+$(error HOOK_MODE must be FRAME or MCP)
+endif
+
+EE_OBJS_DIR = obj/$(EE_REGION)/
+EE_BIN_DIR = bin/
+EE_RELEASE_DIR = release/
+EE_ELF = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).elf
+EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
+EE_PNACH = $(EE_BIN).pnach
+EE_RAW = $(EE_BIN).raw
+EE_TEMPLATE_DIR = $(if $(filter MCP,$(HOOK_MODE)),template/mcp,template)
+EE_RELEASE_PNACH = $(EE_RELEASE_DIR)$(PNACH_NAME).pnach
+EE_LINKFILE = $(EE_OBJS_DIR)linkfile
+EE_LIBRARY = $(LIBRAC5)/lib/librac5$(EE_REGION).a
+EE_OBJS := $(addprefix $(EE_OBJS_DIR),$(EE_OBJS))
+EE_CFLAGS = -std=gnu99 -Os -G0 -Wall -W $(if $(filter 2 3,$(EE_GCC_MAJOR)),,-Werror) -ffreestanding -fno-builtin -fno-pic -mno-abicalls -ffunction-sections -fdata-sections -D_EE -DDEBUG $(EE_DEFS)
+EE_INCS = -I$(LIBRAC5)/include -I$(PS2SDK)/common/include
+EE_LDFLAGS = -nostdlib -nostartfiles -Wl,--gc-sections -L$(LIBRAC5)/lib
+EE_C_COMPILE = $(EE_CC) $(EE_CFLAGS) $(EE_INCS)
+
+.PHONY: all code release clean clean-release library FORCE
+all: $(EE_BIN) code
+
+library:
+	$(MAKE) -C $(LIBRAC5) -f Makefile.$(EE_REGION)
+
+$(EE_OBJS_DIR)%.o: %.c $(wildcard $(LIBRAC5)/include/*.h) Makefile.defs ../Makefile.eeglobal ../Makefile.$(EE_REGION)
+	@mkdir -p $(@D)
+	$(EE_C_COMPILE) -MMD -MP -c $< -o $@
+
+$(EE_OBJS_DIR)crt0.o: ../crt0.S ../Makefile.eeglobal
+	@mkdir -p $(@D)
+	$(EE_C_COMPILE) -c $< -o $@
+
+$(EE_LINKFILE): ../linkfile.template Makefile.defs ../Makefile.eeglobal FORCE
+	@mkdir -p $(@D)
+	$(EE_CC) -E -P -x c -D_PROGRAM_ENTRY=0x$(ADDRESS) $< -o $@
+
+$(EE_ELF): $(EE_OBJS) $(EE_OBJS_DIR)crt0.o $(EE_LINKFILE) library
+	@mkdir -p $(@D)
+	$(EE_C_COMPILE) $(EE_LDFLAGS) -Wl,-T,$(EE_LINKFILE),-Map,$(@:.elf=.map) -o $@ $(EE_OBJS_DIR)crt0.o $(EE_OBJS) $(EE_LIBS) -lgcc
+
+$(EE_BIN): $(EE_ELF)
+	$(EE_OBJCOPY) -O binary $< $@
+
+code: $(EE_BIN) $(EE_TEMPLATE_DIR)/footer.$(EE_REGION).raw $(EE_TEMPLATE_DIR)/footer.$(EE_REGION).pnach
+	@test $$((0x$(ADDRESS) & 15)) -eq 0 && test $$((0x$(ADDRESS))) -ge $$((0xf0000)) && test $$((0x$(ADDRESS) + $$(wc -c < $(EE_BIN)))) -le $$((0x100000)) || { echo "Invalid payload address or size"; exit 1; }
+	@test "$$($(EE_SIZE) -A $(EE_ELF) | awk 'BEGIN { size=0 } $$1 == ".bss" { size+=$$2 } END { print size }')" = 0 || { echo "Use initialized data; the hook does not initialize BSS"; exit 1; }
+	bin2code $(EE_BIN) $(ADDRESS) $(EE_RAW) raw
+	cat $(EE_TEMPLATE_DIR)/footer.$(EE_REGION).raw >> $(EE_RAW)
+	bin2code $(EE_BIN) $(ADDRESS) $(EE_PNACH) pnach
+	cat $(EE_TEMPLATE_DIR)/footer.$(EE_REGION).pnach >> $(EE_PNACH)
+
+release: all
+	@mkdir -p $(EE_RELEASE_DIR)
+	@test -n "$(RELEASE_NAME)" || { echo "Set RELEASE_NAME in Makefile.defs"; exit 1; }
+	printf '[%s]\n' "$(RELEASE_NAME)" > $(EE_RELEASE_PNACH)
+	@if [ -n "$(AUTHOR)" ]; then printf 'author=%s\n' "$(AUTHOR)" >> $(EE_RELEASE_PNACH); fi
+	cat $(EE_PNACH) >> $(EE_RELEASE_PNACH)
+
+clean:
+	rm -rf $(EE_OBJS_DIR)
+	rm -f $(EE_ELF) $(EE_ELF:.elf=.map) $(EE_BIN) $(EE_PNACH) $(EE_RAW)
+
+clean-release:
+	rm -f $(EE_RELEASE_PNACH)
+
+ifeq ($(filter clean clean-release,$(MAKECMDGOALS)),)
+-include $(EE_OBJS:.o=.d)
+endif
+
+FORCE:

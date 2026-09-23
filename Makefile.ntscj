@@ -1,0 +1,8 @@
+EE_REGION = ntscj
+EE_DEFS = -DRAC5_NTSCJ -DRAC_NTSCJ -DNTSCJ
+EE_LIBS = -lrac5ntscj
+PNACH_NAME = SCPS-15120_9ADCF7AF
+
+include $(CURDIR)/Makefile.defs
+include $(CURDIR)/../Makefile.pref
+include $(CURDIR)/../Makefile.eeglobal

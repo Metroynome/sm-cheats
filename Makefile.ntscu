@@ -1,0 +1,8 @@
+EE_REGION = ntscu
+EE_DEFS = -DRAC5_NTSCU -DRAC_NTSCU -DNTSCU
+EE_LIBS = -lrac5ntscu
+PNACH_NAME = SCUS-97615_8661F7BA
+
+include $(CURDIR)/Makefile.defs
+include $(CURDIR)/../Makefile.pref
+include $(CURDIR)/../Makefile.eeglobal

@@ -1,0 +1,4 @@
+EE_FILE_NAME = test
+RELEASE_NAME = Address Test
+EE_OBJS = main.o
+ADDRESS = 000f0000

@@ -1,0 +1,4 @@
+EE_FILE_NAME = libc-demo
+RELEASE_NAME = Libc Test
+EE_OBJS = main.o
+ADDRESS = 000f0000

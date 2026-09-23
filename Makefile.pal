@@ -1,0 +1,8 @@
+EE_REGION = pal
+EE_DEFS = -DRAC5_PAL -DRAC_PAL -DPAL
+EE_LIBS = -lrac5pal
+PNACH_NAME = SCES-55019_FCB981D5
+
+include $(CURDIR)/Makefile.defs
+include $(CURDIR)/../Makefile.pref
+include $(CURDIR)/../Makefile.eeglobal

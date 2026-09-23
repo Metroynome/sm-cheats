@@ -1,0 +1,4 @@
+EE_FILE_NAME = printf
+RELEASE_NAME = Printf Test
+EE_OBJS = main.o
+ADDRESS = 000f0000

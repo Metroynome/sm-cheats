@@ -1,0 +1,8 @@
+EE_PREFIX ?= $(if $(shell command -v mips64r5900el-ps2-elf-gcc 2>/dev/null),mips64r5900el-ps2-elf-,ee-)
+EE_CC = $(EE_PREFIX)gcc
+EE_LD = $(EE_PREFIX)ld
+EE_OBJCOPY = $(EE_PREFIX)objcopy
+EE_SIZE = $(EE_PREFIX)size
+LIBRAC5 ?= ../../librac5
+
+HOOK_MODE ?= FRAME
