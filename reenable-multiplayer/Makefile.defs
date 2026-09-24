@@ -1,0 +1,4 @@
+EE_FILE_NAME = re-mp
+RELEASE_NAME = Reenable Multiplayer
+EE_OBJS = main.o
+ADDRESS = 000f0000
