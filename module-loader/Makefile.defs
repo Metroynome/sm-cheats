@@ -1,0 +1,18 @@
+EE_FILE_NAME = module-loader
+RELEASE_NAME = SM Module Loader
+EE_OBJS = main.o
+ADDRESS = 000f0000
+
+.DEFAULT_GOAL := all
+.PHONY: loader-size-check module-files
+all: loader-size-check
+loader-size-check: bin/module-loader.$(EE_REGION).bin
+	@test $$(wc -c < bin/module-loader.$(EE_REGION).bin) -le 16384 || { echo "Loader overlaps module area"; exit 1; }
+
+release: module-files
+module-files:
+	$(MAKE) -C modules/hello EE_PREFIX=$(EE_PREFIX)
+	mkdir -p release/hostfs/sm/debug release/hostfs/sm/modules
+	cp hostfs/sm/debug/exceptionhandler.bin release/hostfs/sm/debug/
+	cp hostfs/sm/modules/hello.bin release/hostfs/sm/modules/
+	cp hostfs/sm/modules.txt release/hostfs/sm/
