@@ -1,1 +1,6 @@
 patch=1,EE,21E67F38,extended,0803C000
+patch=0,EE,21EF8600,extended,00140000
+patch=0,EE,21E91620,extended,3C0301D2
+patch=0,EE,21E91628,extended,3C090014
+patch=0,EE,21E91638,extended,34674000
+patch=0,EE,21E9168C,extended,AD870850

@@ -7,12 +7,20 @@ ADDRESS = 000f0000
 .PHONY: loader-size-check module-files
 all: loader-size-check
 loader-size-check: bin/module-loader.$(EE_REGION).bin
-	@test $$(wc -c < bin/module-loader.$(EE_REGION).bin) -le 16384 || { echo "Loader overlaps module area"; exit 1; }
+	@test $$(wc -c < bin/module-loader.$(EE_REGION).bin) -lt 57344 || { echo "Loader overlaps state"; exit 1; }
 
+ifeq ($(PACKAGE_MODULES),)
 release: module-files
-module-files:
-	$(MAKE) -C modules/hello EE_PREFIX=$(EE_PREFIX)
+endif
+module-files: all
+	$(MAKE) -f ../Makefile.ntscu all PACKAGE_MODULES=0
+	$(MAKE) -f ../Makefile.pal all PACKAGE_MODULES=0
+	$(MAKE) -f ../Makefile.ntscj all PACKAGE_MODULES=0
+	EE_PREFIX=$(EE_PREFIX) sh layout.sh
+	$(MAKE) -C modules release EE_PREFIX=$(EE_PREFIX)
 	mkdir -p release/hostfs/sm/debug release/hostfs/sm/modules
-	cp hostfs/sm/debug/exceptionhandler.bin release/hostfs/sm/debug/
+	@if [ -f hostfs/sm/debug/exceptionhandler.bin ]; then cp hostfs/sm/debug/exceptionhandler.bin release/hostfs/sm/debug/; else rm -f release/hostfs/sm/debug/exceptionhandler.bin; fi
 	cp hostfs/sm/modules/hello.bin release/hostfs/sm/modules/
 	cp hostfs/sm/modules.txt release/hostfs/sm/
+
+obj/$(EE_REGION)/main.o: module.h exception.h heap.h

@@ -1,0 +1,4 @@
+#EE_DEFS += -DDEBUG
+SUPPORTED_REGIONS = ntscu
+MODULE_ADDRESS ?= $(MODULE_HEAP_START)
+include ../../module.mk

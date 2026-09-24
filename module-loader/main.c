@@ -4,11 +4,15 @@
 #include "kernel.h"
 #include "module.h"
 #include "exception.h"
+#include "heap.h"
 
-#define MODULE_START 0x000f4000U
+#ifndef MODULE_START
+extern unsigned char _payload_end[];
+#define MODULE_START (((unsigned int)_payload_end + 63U) & ~63U)
+#endif
 #define MODULE_END 0x000fe000U
 #define MODULE_LIMIT 8
-#define LOADER_MAGIC 0x534d4c32U
+#define LOADER_MAGIC 0x534d4c34U
 
 struct LoadedModule {
     unsigned int address, size;
@@ -16,7 +20,7 @@ struct LoadedModule {
 };
 
 struct LoaderState {
-    unsigned int magic, busy, count;
+    unsigned int magic, busy, count, heapReady;
     struct LoadedModule modules[MODULE_LIMIT];
     char list[2048];
 };
@@ -112,15 +116,70 @@ static int validEntry(unsigned int offset, unsigned int size)
     return offset == SM_MODULE_NO_ENTRY || (!(offset & 3) && offset < size);
 }
 
+static int heapReserved(void)
+{
+    volatile unsigned int *word;
+    unsigned int list, node, start, size, total = 0, count = 0;
+    if (*(volatile unsigned int *)GAME_HEAP_SIZE != GAME_HEAP_END - MODULE_HEAP_END) {
+        printf("loader: heap size %08x, expected %08x (base setting %08x)\n",
+               *(volatile unsigned int *)GAME_HEAP_SIZE, GAME_HEAP_END - MODULE_HEAP_END,
+               *(volatile unsigned int *)GAME_HEAP_BASE);
+        return 0;
+    }
+    for (list = 0; list < 2; ++list) {
+        node = list ? GAME_HEAP_BLOCKS : *(volatile unsigned int *)GAME_HEAP_FREE;
+        while (node) {
+            if (++count > 512 || (node & 3) || node < MODULE_HEAP_END || node > 0x01fffff0U) {
+                printf("loader: invalid heap list %u node %08x (count %u)\n", list, node, count);
+                return 0;
+            }
+            word = (volatile unsigned int *)node;
+            size = word[1];
+            start = word[2];
+            if (size) {
+                if (start < MODULE_HEAP_END || start >= GAME_HEAP_END ||
+                    size > GAME_HEAP_END - start || size > GAME_HEAP_END - MODULE_HEAP_END - total) {
+                    printf("loader: heap block %08x start %08x size %08x total %08x\n", node, start, size, total);
+                    return 0;
+                }
+                total += size;
+            }
+            node = word[0];
+        }
+    }
+    if (total != GAME_HEAP_END - MODULE_HEAP_END)
+        printf("loader: heap coverage %08x, expected %08x\n", total, GAME_HEAP_END - MODULE_HEAP_END);
+    return total == GAME_HEAP_END - MODULE_HEAP_END;
+}
+
+static unsigned int arenaEnd(unsigned int address)
+{
+    if (address >= MODULE_START && address < MODULE_END)
+        return MODULE_END;
+    if (STATE->heapReady && address >= MODULE_HEAP_START && address < MODULE_HEAP_END)
+        return MODULE_HEAP_END;
+    return 0;
+}
+
+static void printMemory(void)
+{
+    unsigned int i, used = 0, total = MODULE_END - MODULE_START;
+    if (STATE->heapReady)
+        total += MODULE_HEAP_END - MODULE_HEAP_START;
+    for (i = 0; i < STATE->count; ++i)
+        used += STATE->modules[i].size;
+    printf("loader: modules %u/%u, memory %u used / %u total (%u unoccupied bytes)\n",
+           STATE->count, MODULE_LIMIT, used, total, total - used);
+}
+
 static int validHeader(const ModuleHeader *header)
 {
-    unsigned int i;
+    unsigned int i, end = arenaEnd(header->address);
     if (header->magic != SM_MODULE_MAGIC || header->version != SM_MODULE_VERSION ||
         (header->region && header->region != SM_MODULE_REGION) ||
-        (header->address & 15) || header->address < MODULE_START ||
-        header->address >= MODULE_END || !header->imageSize ||
+        (header->address & 15) || !end || !header->imageSize ||
         (header->imageSize & 3) || header->imageSize > header->memorySize ||
-        header->memorySize > MODULE_END - header->address ||
+        header->memorySize > end - header->address ||
         !validEntry(header->initOffset, header->imageSize) ||
         !validEntry(header->updateOffset, header->imageSize))
         return 0;
@@ -237,7 +296,14 @@ int main(void)
         STATE->busy = 1;
         printf("loader: starting (region %u)\n", SM_MODULE_REGION);
         installExceptionHandler();
+        STATE->heapReady = heapReserved();
+        printf("loader: low modules %08x-%08x\n", MODULE_START, MODULE_END);
+        if (STATE->heapReady)
+            printf("loader: reserved heap modules %08x-%08x (256 KiB)\n", MODULE_HEAP_START, MODULE_HEAP_END);
+        else
+            printf("loader: heap reservation inactive; heap modules disabled (see diagnostic above)\n");
         loadModuleList();
+        printMemory();
         STATE->busy = 0;
     }
     if (STATE->busy)

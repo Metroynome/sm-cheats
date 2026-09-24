@@ -29,6 +29,12 @@ typedef struct ModuleApi {
     int (*close)(int fd);
 } ModuleApi;
 
+#ifdef DEBUG
+#define MDPRINTF(api, ...) do { (api)->print(__VA_ARGS__); } while (0)
+#else
+#define MDPRINTF(api, ...) do { } while (0)
+#endif
+
 typedef int (*ModuleInit)(const ModuleApi *api);
 typedef void (*ModuleUpdate)(void);
 
